@@ -1,3 +1,62 @@
+diff --git a/source/Core/Database/Adapter/Doctrine/Database.php b/source/Core/Database/Adapter/Doctrine/Database.php
+--- a/source/Core/Database/Adapter/Doctrine/Database.php
++++ b/source/Core/Database/Adapter/Doctrine/Database.php
+@@ -306,6 +306,7 @@ class Database implements DatabaseInterface
+         // @deprecated since v6.0 (2016-04-13); Backward compatibility for v5.3.0.
+         $parameters = $this->assureParameterIsAnArray($parameters);
+         // END deprecated
++        $query = $this->normalizeLegacyOxconfigDecodeQuery($query);
+ 
+         if ($this->doesStatementProduceOutput($query)) {
+             try {
+@@ -595,6 +596,7 @@ class Database implements DatabaseInterface
+         // @deprecated since v6.0 (2016-04-13); Backward compatibility for v5.3.0.
+         $parameters = $this->assureParameterIsAnArray($parameters);
+         // END deprecated
++        $query = $this->normalizeLegacyOxconfigDecodeQuery($query);
+ 
+         $result = null;
+ 
+@@ -737,6 +739,7 @@ class Database implements DatabaseInterface
+         // @deprecated since v6.0 (2016-04-13); Backward compatibility for v5.3.0.
+         $parameters = $this->assureParameterIsAnArray($parameters);
+         // END deprecated
++        $query = $this->normalizeLegacyOxconfigDecodeQuery($query);
+ 
+         $this->checkIfSqlIsReadOnly($query);
+         $result = [];
+@@ -1021,6 +1024,7 @@ class Database implements DatabaseInterface
+         // @deprecated since v6.0 (2016-04-13); Backward compatibility for v5.3.0.
+         $parameters = $this->assureParameterIsAnArray($parameters);
+         // END deprecated
++        $query = $this->normalizeLegacyOxconfigDecodeQuery($query);
+ 
+         try {
+             $statement = $this->getConnection()->executeQuery($query, $parameters);
+@@ -1041,6 +1045,23 @@ class Database implements DatabaseInterface
+ 
+         return $result;
+     }
++
++    /**
++     * Legacy modules can still query oxconfig through MySQL DECODE().
++     * After the transition script converted oxconfig values, the raw value is already readable.
++     */
++    private function normalizeLegacyOxconfigDecodeQuery($query)
++    {
++        if (stripos($query, 'oxconfig') === false || stripos($query, 'DECODE') === false) {
++            return $query;
++        }
++
++        return preg_replace(
++            '/\bDECODE\s*\(\s*(`?oxvarvalue`?)\s*,\s*(\'[^\']*\'|"[^"]*")\s*\)/i',
++            '$1',
++            $query
++        );
++    }
+ 
+     /**
+      * @inheritdoc
 diff --git a/source/Core/Config.php b/source/Core/Config.php
 index 6b1db27..e9d75a6 100644
 --- a/source/Core/Config.php
