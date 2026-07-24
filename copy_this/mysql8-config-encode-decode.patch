@@ -33,26 +33,37 @@ diff --git a/source/Core/Database/Adapter/Doctrine/Database.php b/source/Core/Da
  
          try {
              $statement = $this->getConnection()->executeQuery($query, $parameters);
-@@ -1041,6 +1045,23 @@ class Database implements DatabaseInterface
+@@ -1041,6 +1045,34 @@ class Database implements DatabaseInterface
  
          return $result;
      }
 +
 +    /**
-+     * Legacy modules can still query oxconfig through MySQL DECODE().
-+     * After the transition script converted oxconfig values, the raw value is already readable.
++     * Legacy code can still query decoded values through MySQL DECODE().
++     * After the transition script converted affected values, the raw value is already readable.
 +     */
 +    private function normalizeLegacyOxconfigDecodeQuery($query)
 +    {
-+        if (stripos($query, 'oxconfig') === false || stripos($query, 'DECODE') === false) {
++        if (stripos($query, 'DECODE') === false) {
 +            return $query;
 +        }
 +
-+        return preg_replace(
-+            '/\bDECODE\s*\(\s*((?:`?\w+`?\.)?`?oxvarvalue`?)\s*,\s*(\'[^\']*\'|"[^"]*")\s*\)/i',
-+            '$1',
-+            $query
-+        );
++        $legacyDecodeColumns = [
++            'oxconfig' => 'oxvarvalue',
++            'oxuserpayments' => 'oxvalue',
++        ];
++
++        foreach ($legacyDecodeColumns as $tableName => $columnName) {
++            if (stripos($query, $tableName) !== false) {
++                $query = preg_replace(
++                    '/\bDECODE\s*\(\s*((?:`?\w+`?\.)?`?' . $columnName . '`?)\s*,\s*(\'[^\']*\'|"[^"]*")\s*\)/i',
++                    '$1',
++                    $query
++                );
++            }
++        }
++
++        return $query;
 +    }
  
      /**

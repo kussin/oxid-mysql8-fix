@@ -10,7 +10,7 @@ SQLSTATE[42000]: Syntax error or access violation: 1305 FUNCTION ... DECODE does
 
 ## Background
 
-OXID eShop 6.5.x still uses MySQL `ENCODE()` and `DECODE()` in several places for values stored in `oxconfig`. MySQL 8 no longer provides these functions. When a hosting provider migrates an existing MySQL 5.7 database to MySQL 8, shop configuration values and module configuration can no longer be read or written correctly.
+OXID eShop 6.5.x still uses MySQL `ENCODE()` and `DECODE()` in several places for values stored in `oxconfig` and some legacy payment value lookups. MySQL 8 no longer provides these functions. When a hosting provider migrates an existing MySQL 5.7 database to MySQL 8, shop configuration values and affected checkout paths can no longer be read or written correctly.
 
 PROFIHOST documents the planned MySQL 5.7 to MySQL 8.0 upgrades in its help center and recommends checking applications for MySQL 8 compatibility in time:
 
@@ -159,6 +159,7 @@ rm -rf source/tmp/*
 - Existing encrypted `oxconfig` values must be decoded before the MySQL 8 migration.
 - After applying the patch, affected `oxconfig` values are stored unencrypted.
 - The patch contains a narrow fallback for legacy code that still queries already-decoded `oxconfig` values through `DECODE(oxvarvalue, '...')` or `DECODE(cfg.oxvarvalue, '...')`.
+- The patch also normalizes legacy `oxuserpayments.oxvalue` reads such as `DECODE(oxvalue, '...')`, which can be triggered during order finalization.
 - Additional MySQL 8 incompatibilities may still exist in project code or third-party modules.
 - The patch was derived from a real migration case and must always be tested for the specific project.
 

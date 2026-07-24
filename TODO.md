@@ -10,6 +10,7 @@ This checklist collects MySQL 8 compatibility topics that are relevant for OXID 
 - [ ] Test `vendor/bin/oe-console oe:module:apply-configuration`.
 - [ ] Test cache clearing and warmup after patch installation.
 - [ ] Test shop startup for all configured subshops or editions.
+- [ ] Test checkout with standard OXID payment methods that load `oxuserpayments.oxvalue`.
 - [ ] Check logs for remaining `ENCODE()` or `DECODE()` SQL errors.
 
 ## oxconfig Transition

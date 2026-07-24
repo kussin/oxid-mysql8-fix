@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Extended the legacy `DECODE()` fallback to also handle `oxuserpayments.oxvalue` queries used by OXID's `UserPayment::load()` during order finalization.
+- Covers checkout failures where standard payment methods still trigger `DECODE(oxvalue, '...')` through the OXID order payment lookup.
+
 ## 0.1.2
 
 - Extended the legacy `DECODE()` fallback to also handle aliased `oxconfig` queries such as `DECODE(cfg.oxvarvalue, '...')`.
