@@ -158,7 +158,7 @@ rm -rf source/tmp/*
 - This patch is a workaround for OXID eShop 6.5.x, not official MySQL 8 support.
 - Existing encrypted `oxconfig` values must be decoded before the MySQL 8 migration.
 - After applying the patch, affected `oxconfig` values are stored unencrypted.
-- The patch contains a narrow fallback for legacy modules that still query already-decoded `oxconfig` values through `DECODE(oxvarvalue, '...')`.
+- The patch contains a narrow fallback for legacy code that still queries already-decoded `oxconfig` values through `DECODE(oxvarvalue, '...')` or `DECODE(cfg.oxvarvalue, '...')`.
 - Additional MySQL 8 incompatibilities may still exist in project code or third-party modules.
 - The patch was derived from a real migration case and must always be tested for the specific project.
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Extended the legacy `DECODE()` fallback to also handle aliased `oxconfig` queries such as `DECODE(cfg.oxvarvalue, '...')`.
+- Covers OXID admin theme configuration screens that load theme settings through `ShopConfiguration::loadConfVars()`.
+
 ## 0.1.1
 
 - Added a narrow database adapter fallback for legacy modules that still run `SELECT DECODE(oxvarvalue, '...') ... FROM oxconfig` after the decoded `oxconfig` transition.
