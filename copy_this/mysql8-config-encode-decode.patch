@@ -1,0 +1,225 @@
+diff --git a/source/Core/Config.php b/source/Core/Config.php
+index 6b1db27..e9d75a6 100644
+--- a/source/Core/Config.php
++++ b/source/Core/Config.php
+@@ -1892,7 +1892,7 @@ class Config extends \OxidEsales\Eshop\Core\Base
+         ]);
+ 
+         $query = "insert into oxconfig (oxid, oxshopid, oxmodule, oxvarname, oxvartype, oxvarvalue)
+-                  values (:oxid, :oxshopid, :oxmodule, :oxvarname, :oxvartype, ENCODE(:value, :key))";
++                  values (:oxid, :oxshopid, :oxmodule, :oxvarname, :oxvartype, :value)";
+         $db->execute($query, [
+             ':oxid' => $newOXID,
+             ':oxshopid' => $shopId,
+@@ -1900,7 +1900,6 @@ class Config extends \OxidEsales\Eshop\Core\Base
+             ':oxvarname' => $varName,
+             ':oxvartype' => $varType,
+             ':value' => $value ?? '',
+-            ':key' => $this->getConfigParam('sConfigKey'),
+         ]);
+ 
+         $this->informServicesAfterConfigurationChanged($varName, $shopId, $module);
+@@ -1945,7 +1944,10 @@ class Config extends \OxidEsales\Eshop\Core\Base
+         switch ($type) {
+             case 'arr':
+             case 'aarr':
+-                $value = unserialize($mOrigValue, ['allowed_classes' => false]);
++                $value = @unserialize($mOrigValue, ['allowed_classes' => false]);
++                if ($value === false && $mOrigValue !== serialize(false)) {
++                    $value = [];
++                }
+                 break;
+             case 'bool':
+                 $value = ($mOrigValue == 'true' || $mOrigValue == '1');
+@@ -1969,7 +1971,7 @@ class Config extends \OxidEsales\Eshop\Core\Base
+      */
+     public function getDecodeValueQuery($fieldName = "oxvarvalue")
+     {
+-        return " DECODE( {$fieldName}, '" . $this->getConfigParam('sConfigKey') . "') ";
++        return $fieldName;
+     }
+ 
+     /**
+diff --git a/source/Core/Dao/ApplicationServerDao.php b/source/Core/Dao/ApplicationServerDao.php
+index d435511..82df22d 100644
+--- a/source/Core/Dao/ApplicationServerDao.php
++++ b/source/Core/Dao/ApplicationServerDao.php
+@@ -153,12 +153,11 @@ class ApplicationServerDao
+      */
+     protected function update($appServer)
+     {
+-        $query = "UPDATE oxconfig SET oxvarvalue = ENCODE(:value, :key)
++        $query = "UPDATE oxconfig SET oxvarvalue = :value
+                   WHERE oxvarname = :oxvarname and oxshopid = :oxshopid";
+ 
+         $parameter = [
+             ':value' => $this->convertAppServerToConfigOption($appServer),
+-            ':key' => $this->config->getConfigParam('sConfigKey'),
+             ':oxvarname' => self::CONFIG_NAME_FOR_SERVER_INFO . $appServer->getId(),
+             ':oxshopid' => $this->config->getBaseShopId()
+         ];
+@@ -179,7 +178,7 @@ class ApplicationServerDao
+     protected function insert($appServer)
+     {
+         $query = "insert into oxconfig (oxid, oxshopid, oxmodule, oxvarname, oxvartype, oxvarvalue)
+-                  values (:oxid, :oxshopid, '', :oxvarname, :oxvartype, ENCODE(:value, :key))";
++                  values (:oxid, :oxshopid, '', :oxvarname, :oxvartype, :value)";
+ 
+         $parameter = [
+             ':oxid' => \OxidEsales\Eshop\Core\Registry::getUtilsObject()->generateUID(),
+@@ -187,7 +186,6 @@ class ApplicationServerDao
+             ':oxvarname' => self::CONFIG_NAME_FOR_SERVER_INFO . $appServer->getId(),
+             ':oxvartype' => 'arr',
+             ':value' => $this->convertAppServerToConfigOption($appServer),
+-            ':key' => $this->config->getConfigParam('sConfigKey')
+         ];
+ 
+         $this->database->execute($query, $parameter);
+diff --git a/source/Core/Module/ModuleVariablesLocator.php b/source/Core/Module/ModuleVariablesLocator.php
+index 2708ccd..f5774d5 100644
+--- a/source/Core/Module/ModuleVariablesLocator.php
++++ b/source/Core/Module/ModuleVariablesLocator.php
+@@ -123,16 +123,16 @@ class ModuleVariablesLocator
+         $masterDb = \OxidEsales\Eshop\Core\DatabaseProvider::getMaster();
+ 
+         $shopId = $this->getShopIdCalculator()->getShopId();
+-        $configKey = $this->getConfigurationKey();
+ 
+-        $query = "SELECT DECODE( oxvarvalue , :configkey ) FROM oxconfig WHERE oxvarname = :oxvarname AND oxshopid = :oxshopid";
++        $query = "SELECT oxvarvalue FROM oxconfig WHERE oxvarname = :oxvarname AND oxshopid = :oxshopid";
+         $value = $masterDb->getOne($query, [
+-            ':configkey' => $configKey,
+             ':oxvarname' => $name,
+             ':oxshopid'  => $shopId
+         ]);
+ 
+-        return unserialize($value);
++        $moduleVariables = @unserialize($value);
++
++        return is_array($moduleVariables) ? $moduleVariables : [];
+     }
+ 
+     /**
+diff --git a/source/Core/ShopIdCalculator.php b/source/Core/ShopIdCalculator.php
+index c72959d..03b8411 100644
+--- a/source/Core/ShopIdCalculator.php
++++ b/source/Core/ShopIdCalculator.php
+@@ -82,15 +82,11 @@ class ShopIdCalculator
+         $aMap = [];
+ 
+-        $sConfKey = $this->_getConfKey();
+-
+-        $sSelect = "SELECT oxshopid, oxvarname, DECODE( oxvarvalue , :configkey ) as oxvarvalue " .
++        $sSelect = "SELECT oxshopid, oxvarname, oxvarvalue " .
+             "FROM oxconfig WHERE oxvarname in ('aLanguageURLs','sMallShopURL','sMallSSLShopURL')";
+ 
+         // We force reading from master to prevent issues with slow replications or open transactions (see ESDEV-3804).
+         $masterDb = \OxidEsales\Eshop\Core\DatabaseProvider::getMaster();
+-        $oRs = $masterDb->select($sSelect, [
+-            ':configkey' => $sConfKey
+-        ]);
++        $oRs = $masterDb->select($sSelect);
+ 
+         if ($oRs && $oRs->count() > 0) {
+             while (!$oRs->EOF) {
+@@ -99,7 +95,7 @@ class ShopIdCalculator
+                 $sURL = $oRs->fields[2];
+ 
+                 if ($sVar == 'aLanguageURLs') {
+-                    $aUrls = unserialize($sURL);
++                    $aUrls = @unserialize($sURL);
+                     if (is_array($aUrls) && count($aUrls)) {
+                         $aUrls = array_filter($aUrls);
+                         $aUrls = array_fill_keys($aUrls, $iShp);
+diff --git a/source/Internal/Framework/Config/Dao/ShopConfigurationSettingDao.php b/source/Internal/Framework/Config/Dao/ShopConfigurationSettingDao.php
+index 2dc7051..f4dfb1d 100644
+--- a/source/Internal/Framework/Config/Dao/ShopConfigurationSettingDao.php
++++ b/source/Internal/Framework/Config/Dao/ShopConfigurationSettingDao.php
+@@ -80,7 +80,7 @@ class ShopConfigurationSettingDao implements ShopConfigurationSettingDaoInterface
+                 'oxshopid'      => ':shopId',
+                 'oxvarname'     => ':name',
+                 'oxvartype'     => ':type',
+-                'oxvarvalue'    => 'encode(:value, :key)',
++                'oxvarvalue'    => ':value',
+             ])
+             ->setParameters([
+                 'id'        => $this->shopAdapter->generateUniqueId(),
+@@ -92,7 +92,6 @@ class ShopConfigurationSettingDao implements ShopConfigurationSettingDaoInterface
+                     $shopConfigurationSetting->getType(),
+                     $shopConfigurationSetting->getValue()
+                 ),
+-                'key'       => $this->context->getConfigurationEncryptionKey(),
+             ]);
+ 
+         $queryBuilder->execute();
+@@ -116,7 +115,7 @@ class ShopConfigurationSettingDao implements ShopConfigurationSettingDaoInterface
+     {
+         $queryBuilder = $this->queryBuilderFactory->create();
+         $queryBuilder
+-            ->select('decode(oxvarvalue, :key) as value, oxvartype as type, oxvarname as name')
++            ->select('oxvarvalue as value, oxvartype as type, oxvarname as name')
+             ->from('oxconfig')
+             ->where('oxshopid = :shopId')
+             ->andWhere('oxvarname = :name')
+@@ -124,7 +123,6 @@ class ShopConfigurationSettingDao implements ShopConfigurationSettingDaoInterface
+             ->setParameters([
+                 'shopId'    => $shopId,
+                 'name'      => $name,
+-                'key'       => $this->context->getConfigurationEncryptionKey(),
+             ]);
+ 
+         $result = $queryBuilder->execute()->fetch();
+diff --git a/source/Internal/Framework/Config/Utility/ShopSettingEncoder.php b/source/Internal/Framework/Config/Utility/ShopSettingEncoder.php
+index 28969ec..7547b34 100644
+--- a/source/Internal/Framework/Config/Utility/ShopSettingEncoder.php
++++ b/source/Internal/Framework/Config/Utility/ShopSettingEncoder.php
+@@ -47,7 +47,10 @@ class ShopSettingEncoder implements ShopSettingEncoderInterface
+         switch ($encodingType) {
+             case ShopSettingType::ARRAY:
+             case ShopSettingType::ASSOCIATIVE_ARRAY:
+-                $decodedValue = unserialize($value, ['allowed_classes' => false]);
++                $decodedValue = @unserialize($value, ['allowed_classes' => false]);
++                if ($decodedValue === false && $value !== serialize(false)) {
++                    $decodedValue = [];
++                }
+                 break;
+             case ShopSettingType::BOOLEAN:
+                 $decodedValue = ($value === 'true' || $value === '1');
+diff --git a/source/Internal/Framework/Module/Setting/SettingDao.php b/source/Internal/Framework/Module/Setting/SettingDao.php
+index 176ca94..615ff98 100644
+--- a/source/Internal/Framework/Module/Setting/SettingDao.php
++++ b/source/Internal/Framework/Module/Setting/SettingDao.php
+@@ -184,7 +184,7 @@ class SettingDao implements SettingDaoInterface
+                 'oxshopid'      => ':shopId',
+                 'oxvarname'     => ':name',
+                 'oxvartype'     => ':type',
+-                'oxvarvalue'    => 'encode(:value, :key)',
++                'oxvarvalue'    => ':value',
+             ])
+             ->setParameters([
+                 'id'        => $this->shopAdapter->generateUniqueId(),
+@@ -197,7 +197,6 @@ class SettingDao implements SettingDaoInterface
+                     $shopModuleSetting->getType(),
+                     $shopModuleSetting->getValue()
+                 ),
+-                'key'       => $this->context->getConfigurationEncryptionKey(),
+             ]);
+ 
+         $queryBuilder->execute();
+@@ -243,7 +242,7 @@ class SettingDao implements SettingDaoInterface
+     {
+         $queryBuilder = $this->queryBuilderFactory->create();
+         $queryBuilder
+-            ->select('decode(oxvarvalue, :key) as value, oxvartype as type, oxvarname as name')
++            ->select('oxvarvalue as value, oxvartype as type, oxvarname as name')
+             ->from('oxconfig')
+             ->where('oxshopid = :shopId')
+             ->andWhere('oxmodule = :moduleId')
+@@ -253,7 +252,6 @@ class SettingDao implements SettingDaoInterface
+                 'shopId'    => $shopId,
+                 'moduleId'  => $this->getPrefixedModuleId($moduleId),
+                 'name'      => $name,
+-                'key'       => $this->context->getConfigurationEncryptionKey(),
+             ]);
+ 
+         $result = $queryBuilder->execute()->fetch();

@@ -1,0 +1,16 @@
+_notes
+Thumbs.db
+.DS_Store
+.idea
+.vscode
+.phpstorm.meta.php
+node_modules
+PATCHES.txt
+mysqldumper
+phpMyAdmin-*
+*.webp
+*.log
+*.sql
+*.bak
+*.tmp
+*.swp
